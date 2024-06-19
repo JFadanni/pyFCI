@@ -100,7 +100,7 @@ def fit_FCI(rho, samples=500, threshold=0.1):
     :returns: the fitted dimension, the fitted x0 parameter and the mean square error between the fitted curve and the empirical points
     """
     samples = min( len(rho),samples )
-    data = rho[np.random.choice(len(rho),samples)]
+    data = rho[np.random.choice(len(rho),samples,replace=False)]
 
     fit = scyopt.curve_fit( analytical_FCI, data[:,0], data[:,1] )
     if abs(fit[0][1] - 1)>threshold:
