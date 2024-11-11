@@ -50,29 +50,47 @@ def FCI(dataset):
 
 ################################################################################
 @njit(parallel=True,fastmath=True)
-def FCI_MC(dataset,samples=500):
+def FCI_MC(dataset,n_samples=500):
     """
     Compute the full correlation integral of a **dataset** of N d-dimensional points by random sampling of **samples** pair of points
 
     :param dataset: vector of shape (N,d)
-    :param samples: positive integer
+    :param n_samples: positive integer
     :returns: vector of shape (N(N-1)/2,2)
     """
     n = len(dataset)
     m = int(n*(n-1)/2)
-    samples = min( m, samples )
-    rs = np.empty(samples)
+    n_samples = min( m, n_samples )
+    rs = np.empty(n_samples)
     
-    for k in prange(samples):
-        i = np.random.randint(0,n)
-        j = np.random.randint(0,n)
+    random_pairs = np.random.choice(m,n_samples,replace=False)
+    triuind = np.triu_indices(n,k=1)
+    for k in prange(n_samples):
+        index = random_pairs[k]
+        i = triuind[0][k]
+        j = triuind[1][k]
+#        i = np.random.randint(0,n)
+#        j = np.random.randint(0,n)
         rs[k] = np.linalg.norm(dataset[i]-dataset[j])
     rs = np.sort(rs)
     
-    r = np.empty((samples,2))
-    for i in prange(samples):
-        r[i] = np.array([ rs[i] , i*1./samples ])
+    r = np.empty((n_samples,2))
+    for i in prange(n_samples):
+        r[i] = np.array([ rs[i] , i*1./n_samples ])
     return r
+
+"""
+random_pairs = np.random.choice(m1,samples,replacement=False)
+
+rs = np.empty(samples)
+
+for k in prange(samples):
+
+    index=random_pairs[k]
+
+    i = math.floor((2 * n - 1 - math.sqrt((2 * n - 1)**2 - 8 * index)) / 2)
+    j = index - (i * (2 * n - i - 1)) // 2 + i + 1
+"""
 
 ################################################################################
 @jit(forceobj=True,fastmath=True)
