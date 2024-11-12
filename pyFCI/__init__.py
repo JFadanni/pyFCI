@@ -8,26 +8,31 @@ import pyFCI
 
 
 ################################################################################
-@njit(parallel=True,fastmath=True)
-def center_and_normalize(dataset):
+def center_and_normalize(points):
     """
-    Center and normalize a **dataset** of N d-dimensional points so that its Euclidean barycenter is the zero vector, and each of its points has norm 1. 
+    Center and normalize a dataset of points.
 
-    :param dataset: vector of shape (N,d)
-    :returns: vector of shape (N,d)
+    Parameters
+    ----------
+    points : array of shape (n_samples, d)
+        Input data.
+
+    Returns
+    -------
+    normalized_points : array of shape (n_samples, d)
+        Centered and normalized points.
     """
-    (n1,n2) = np.shape(dataset)
-    r = np.empty((n1,n2))
-    mean = np.empty(n2)
-    for i in prange(n2):
-        mean[i] = np.mean(dataset[:,i])
-    for i in prange(n1):
-        v = dataset[i] - mean
-        r[i] = v / np.linalg.norm(v)
-    return r
+    n_samples, d = points.shape
+    mean = np.mean(points, axis=0)
+    centered_points = points - mean
+
+    norms = np.linalg.norm(centered_points, axis=1)
+    normalized_points = centered_points / norms[:, np.newaxis]
+
+    return normalized_points
 
 ################################################################################
-@njit(parallel=True,fastmath=True)
+@njit(parallel=True, fastmath=True)
 def FCI(dataset):
     """
     Compute the full correlation integral of a **dataset** of N d-dimensional points by exact enumeration
@@ -35,18 +40,19 @@ def FCI(dataset):
     :param dataset: vector of shape (N,d)
     :returns: vector of shape (N(N-1)/2,2)
     """
-    n = len(dataset)
-    m = int(n*(n-1)/2)
-    rs = np.empty(m)
-    for i in prange(n):
-        for j in prange(i+1,n):
-            c = int( -0.5 * i *  (1 + i - 2 * n) + (j - i) - 1 )
-            rs[c] = np.linalg.norm(dataset[i]-dataset[j]) 
-    rs = np.sort(rs)
-    r = np.empty((m,2))
-    for i in prange(m):
-        r[i] = np.array([ rs[i] , i*1./m ])
-    return r
+    num_points = len(dataset)
+    num_pairs = int(num_points * (num_points - 1) / 2)
+    pair_distances = np.empty(num_pairs)
+    for i in prange(num_points):
+        for j in prange(i + 1, num_points):
+            pair_index = int(-0.5 * i * (1 + i - 2 * num_points) + (j - i) - 1)
+            pair_distances[pair_index] = np.linalg.norm(dataset[i] - dataset[j])
+    sorted_distances = np.sort(pair_distances)
+    correlation_integral = np.empty((num_pairs, 2))
+    for i in prange(num_pairs):
+        correlation_integral[i, 0] = sorted_distances[i]
+        correlation_integral[i, 1] = i * 1. / num_pairs
+    return correlation_integral
 
 ################################################################################
 @njit(parallel=True, fastmath=True)
@@ -87,18 +93,7 @@ def FCI_MC(dataset, n_samples=500):
         fci[i] = np.array([sample_distances[i], i * 1. / n_samples])
     
     return fci
-"""
-random_pairs = np.random.choice(m1,samples,replacement=False)
 
-rs = np.empty(samples)
-
-for k in prange(samples):
-
-    index=random_pairs[k]
-
-    i = math.floor((2 * n - 1 - math.sqrt((2 * n - 1)**2 - 8 * index)) / 2)
-    j = index - (i * (2 * n - i - 1)) // 2 + i + 1
-"""
 
 ################################################################################
 @jit(forceobj=True,fastmath=True)
@@ -152,11 +147,10 @@ def local_FCI(dataset, center, ks):
     """
     neighbours = dataset[np.argsort(np.linalg.norm( dataset - dataset[center], axis=1))[0:ks[-1]]]    
   
-    local = np.empty(shape=(0,5))
-    for k in ks:
+    local = np.empty(shape=(len(ks),5))
+
+    for i, k in enumerate(ks):
         fit = fit_FCI( FCI_MC( center_and_normalize( neighbours[0:k] ) ) )
-        local = np.append(local, [[ k, np.linalg.norm( neighbours[k-1] - neighbours[0] ), fit[0], fit[1], fit[2] ]], axis=0 )
+        local[i] = [ k, np.linalg.norm( neighbours[k-1] - neighbours[0] ), fit[0], fit[1], fit[2] ]
 
     return local
-
-
