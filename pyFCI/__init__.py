@@ -1,10 +1,10 @@
 import numpy as np
+import math
 import scipy as scy
 import scipy.optimize as scyopt
 from sympy import gamma, Float
 from numba import jit,njit,prange,vectorize,float64
 import pyFCI
-
 
 
 ################################################################################
@@ -49,36 +49,44 @@ def FCI(dataset):
     return r
 
 ################################################################################
-@njit(parallel=True,fastmath=True)
-def FCI_MC(dataset,n_samples=500):
+@njit(parallel=True, fastmath=True)
+def FCI_MC(dataset, n_samples=500):
     """
-    Compute the full correlation integral of a **dataset** of N d-dimensional points by random sampling of **samples** pair of points
+    Compute the full correlation integral of a dataset by randomly sampling pairs of points.
 
-    :param dataset: vector of shape (N,d)
-    :param n_samples: positive integer
-    :returns: vector of shape (N(N-1)/2,2)
+    This function calculates the distances between randomly selected pairs of points 
+    in the dataset and returns a sorted array representing the full correlation integral.
+
+    :param dataset: A numpy array of shape (N, d) where N is the number of points and 
+                    d is the dimensionality of each point.
+    :param n_samples: An integer representing the number of point pairs to sample.
+                      Defaults to 500.
+    :returns fci: A numpy array of shape (n_samples, 2) containing sorted distances and their 
+              corresponding cumulative distribution values.
     """
-    n = len(dataset)
-    m = int(n*(n-1)/2)
-    n_samples = min( m, n_samples )
-    rs = np.empty(n_samples)
+    n = len(dataset)  # Number of points in the dataset
+    m = int(n * (n - 1) / 2)  # Total possible pairs in the dataset
+    n_samples = min(m, n_samples)  # Ensure samples do not exceed possible pairs
+    sample_distances = np.empty(n_samples)  # Array to store sampled distances
     
-    random_pairs = np.random.choice(m,n_samples,replace=False)
-    triuind = np.triu_indices(n,k=1)
-    for k in prange(n_samples):
-        index = random_pairs[k]
-        i = triuind[0][k]
-        j = triuind[1][k]
-#        i = np.random.randint(0,n)
-#        j = np.random.randint(0,n)
-        rs[k] = np.linalg.norm(dataset[i]-dataset[j])
-    rs = np.sort(rs)
+    # Randomly sample indices for selecting pairs
+    random_indices = np.random.choice(m, n_samples, replace=False)
     
-    r = np.empty((n_samples,2))
+    # Compute distances for randomly selected pairs
+    for k, index in enumerate(random_indices):
+        i = math.floor((2 * n - 1 - math.sqrt((2 * n - 1)**2 - 8 * index)) / 2)
+        j = index - (i * (2 * n - i - 1)) // 2 + i + 1
+        sample_distances[k] = np.linalg.norm(dataset[i] - dataset[j])
+    
+    # Sort distances to form the correlation integral
+    sample_distances = np.sort(sample_distances)
+    
+    # Prepare the output array with sorted distances and their distribution
+    fci = np.empty((n_samples, 2))
     for i in prange(n_samples):
-        r[i] = np.array([ rs[i] , i*1./n_samples ])
-    return r
-
+        fci[i] = np.array([sample_distances[i], i * 1. / n_samples])
+    
+    return fci
 """
 random_pairs = np.random.choice(m1,samples,replacement=False)
 
