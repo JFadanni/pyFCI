@@ -2,6 +2,7 @@ import numpy as np
 import math
 import scipy as scy
 import scipy.optimize as scyopt
+from scipy.spatial.distance import pdist
 from sympy import gamma, Float
 from numba import jit,njit,prange,vectorize,float64
 import pyFCI
@@ -40,6 +41,7 @@ def FCI(dataset):
     :param dataset: vector of shape (N,d)
     :returns: vector of shape (N(N-1)/2,2)
     """
+    #TODO: use pdist to speed up
     num_points = len(dataset)
     num_pairs = int(num_points * (num_points - 1) / 2)
     pair_distances = np.empty(num_pairs)
@@ -55,7 +57,6 @@ def FCI(dataset):
     return correlation_integral
 
 ################################################################################
-@njit(parallel=True, fastmath=True)
 def FCI_MC(dataset, n_samples=500):
     """
     Compute the full correlation integral of a dataset by randomly sampling pairs of points.
@@ -71,18 +72,16 @@ def FCI_MC(dataset, n_samples=500):
               corresponding cumulative distribution values.
     """
     n = len(dataset)  # Number of points in the dataset
-    m = int(n * (n - 1) / 2)  # Total possible pairs in the dataset
-    n_samples = min(m, n_samples)  # Ensure samples do not exceed possible pairs
-    sample_distances = np.empty(n_samples)  # Array to store sampled distances
-    
-    # Randomly sample indices for selecting pairs
-    random_indices = np.random.choice(m, n_samples, replace=False)
-    
-    # Compute distances for randomly selected pairs
-    for k, index in enumerate(random_indices):
-        i = math.floor((2 * n - 1 - math.sqrt((2 * n - 1)**2 - 8 * index)) / 2)
-        j = index - (i * (2 * n - i - 1)) // 2 + i + 1
-        sample_distances[k] = np.linalg.norm(dataset[i] - dataset[j])
+    m = n * (n - 1) // 2  # Total possible pairs in the dataset
+
+    if m < n_samples:
+        sample_distances = pdist(dataset)
+        n_samples = m
+    else:
+        n_samp = math.ceil((-1 + math.sqrt(1 + 8 * n_samples)) / 2) + 1
+        random_indices = np.random.choice(n, n_samp, replace=False)
+        sample_distances = pdist(dataset[random_indices])
+        n_samples = n_samp * (n_samp - 1) // 2
     
     # Sort distances to form the correlation integral
     sample_distances = np.sort(sample_distances)
@@ -90,11 +89,10 @@ def FCI_MC(dataset, n_samples=500):
     # Prepare the output array with sorted distances and their distribution
     fci = np.empty((n_samples, 2))
     for i in prange(n_samples):
-        fci[i] = np.array([sample_distances[i], i * 1. / n_samples])
-    
+        fci[i,0] = sample_distances[i]
+        fci[i,1] = i * 1. / n_samples
     return fci
-
-
+    
 ################################################################################
 @jit(forceobj=True,fastmath=True)
 def analytical_FCI(x,d,x0=1):
@@ -154,3 +152,27 @@ def local_FCI(dataset, center, ks):
         local[i] = [ k, np.linalg.norm( neighbours[k-1] - neighbours[0] ), fit[0], fit[1], fit[2] ]
 
     return local
+
+def main():
+    import time
+    x = np.random.randn(10000,2)
+    y = np.zeros((10000,3))
+    y[:,:2] = x
+    y_norm = center_and_normalize(y)
+    ti = time.time()
+    fci = FCI_MC(y_norm)
+    tf = time.time()
+    fit = fit_FCI(fci)
+
+    print(fit)
+    print("time =",tf-ti)
+
+    print("local_FCI")
+    til = time.time()
+    local = local_FCI(y, 0, range(4,100,10))
+    tfl = time.time()
+    print(local)
+    print(tfl-til)
+
+if __name__ == "__main__":
+    main()
