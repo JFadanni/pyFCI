@@ -33,7 +33,6 @@ def center_and_normalize(points):
     return normalized_points
 
 ################################################################################
-@njit(parallel=True, fastmath=True)
 def FCI(dataset):
     """
     Compute the full correlation integral of a **dataset** of N d-dimensional points by exact enumeration
@@ -41,21 +40,14 @@ def FCI(dataset):
     :param dataset: vector of shape (N,d)
     :returns: vector of shape (N(N-1)/2,2)
     """
-    #TODO: use pdist to speed up
     num_points = len(dataset)
-    num_pairs = int(num_points * (num_points - 1) / 2)
-    pair_distances = np.empty(num_pairs)
-    for i in prange(num_points):
-        for j in prange(i + 1, num_points):
-            pair_index = int(-0.5 * i * (1 + i - 2 * num_points) + (j - i) - 1)
-            pair_distances[pair_index] = np.linalg.norm(dataset[i] - dataset[j])
+    num_pairs = num_points * (num_points - 1) // 2
+    pair_distances = pdist(dataset)
     sorted_distances = np.sort(pair_distances)
     correlation_integral = np.empty((num_pairs, 2))
-    for i in prange(num_pairs):
-        correlation_integral[i, 0] = sorted_distances[i]
-        correlation_integral[i, 1] = i * 1. / num_pairs
+    correlation_integral[:,0] = sorted_distances
+    correlation_integral[:,1] = np.arange(0,num_pairs)/num_pairs
     return correlation_integral
-
 ################################################################################
 def FCI_MC(dataset, n_samples=500):
     """
@@ -88,9 +80,8 @@ def FCI_MC(dataset, n_samples=500):
     
     # Prepare the output array with sorted distances and their distribution
     fci = np.empty((n_samples, 2))
-    for i in prange(n_samples):
-        fci[i,0] = sample_distances[i]
-        fci[i,1] = i * 1. / n_samples
+    fci[:,0] = sample_distances
+    fci[:,1] = np.arange(0,n_samples)/n_samples
     return fci
     
 ################################################################################
