@@ -123,7 +123,7 @@ def fit_FCI(rho, samples=500, threshold=0.1):
 
 # TODO: modify to have also a cutoff by distance, and not only by kNN 
 
-def local_FCI(dataset, center, ks):
+def local_FCI(dataset, center, ks, method = "mc"):
     """
     Given a **dataset** of N d-dimensional points, the index **center** of one of the points and a list of possible neighbourhoods **ks**, it estimates the local intrinsic dimension by using **fit_FCI()** of the reduced dataset of the first k-nearest-neighbours of **dataset[center]**, for each k in **ks**
 
@@ -132,15 +132,22 @@ def local_FCI(dataset, center, ks):
     :param dataset: a vector of shape (N,d)
     :param center: the index of a point in **dataset**
     :param ks: list of increasing positive integers
+    :param method: either "mc" or "full" (default = "mc") FCI method used to compute the local FCI
     :returns: a vector of shape (len(ks),5). For each k in **ks**, returns the list [ k, distance between dataset[center] and the k-th neighbour, fitted dimension, fitted x0, the mean square error of the fit ] 
     """
     neighbours = dataset[np.argsort(np.linalg.norm( dataset - dataset[center], axis=1))[0:ks[-1]]]    
   
     local = np.empty(shape=(len(ks),5))
-
-    for i, k in enumerate(ks):
-        fit = fit_FCI( FCI_MC( center_and_normalize( neighbours[0:k] ) ) )
-        local[i] = [ k, np.linalg.norm( neighbours[k-1] - neighbours[0] ), fit[0], fit[1], fit[2] ]
+    if method == "mc":
+        for i, k in enumerate(ks):
+            fit = fit_FCI( FCI_MC( center_and_normalize( neighbours[0:k] ) ) )
+            local[i] = [ k, np.linalg.norm( neighbours[k-1] - neighbours[0] ), fit[0], fit[1], fit[2] ]
+    elif method == "full":
+        for i, k in enumerate(ks):
+            fit = fit_FCI( FCI( center_and_normalize( neighbours[0:k] ) ) )
+            local[i] = [ k, np.linalg.norm( neighbours[k-1] - neighbours[0] ), fit[0], fit[1], fit[2] ]
+    else:
+        raise ValueError("method must be 'mc' or 'full'")
 
     return local
 
