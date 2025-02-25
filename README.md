@@ -6,9 +6,12 @@
 
 ## Installation
 
-Clone the repository locally
+Clone the original repository locally
 
     git clone https://github.com/vittorioerba/pyFCI.git
+If you are interested in the repository with the improvements
+
+    git clone  https://github.com/JFadanni/pyFCI.git
 
 and install using pip
 
